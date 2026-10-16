@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="es"><head><meta charset="utf-8">
-<title>Perspectiva (prototipo, escenas 1 a 5)</title>
+<title>Perspectiva</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>
 :root{--bg:#050507;--fg:#f4ecdf;--accent:#e8a35f;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -164,9 +164,15 @@ function pickVoice(){const vs=speechSynthesis.getVoices().filter(v=>/^es/i.test(
  for(const l of ['es-CO','es-MX','es-US','es-419'])for(const v of vs)if(v.lang.replace('_','-')===l)return v;return vs.find(v=>!/es-ES/i.test(v.lang))||vs[0]}
 // Las frases se encolan: cada una espera a que termine la anterior (antes cancel() cortaba la segunda)
 let sp=Promise.resolve();
-function speak(t){if(!$('voice').checked||!window.speechSynthesis)return Promise.resolve();
+function tts(t){if(!$('voice').checked||!window.speechSynthesis)return Promise.resolve();
  return new Promise(res=>{const u=new SpeechSynthesisUtterance(t),v=pickVoice();u.lang=v?v.lang:'es-MX';if(v)u.voice=v;u.rate=.92;
   let done=false;const fin=()=>{if(!done){done=true;res()}};u.onend=fin;u.onerror=fin;setTimeout(fin,t.length*110+3000);speechSynthesis.speak(u)})}
+// Audios pregrabados: carpeta audio/01.mp3, 02.mp3... en el orden de NARR. Si faltan, se usa la voz del navegador.
+const NARR=["A veces sientes que has vivido cosas difíciles. Que hay problemas que no logras resolver y que te superan.", "Si alguna vez has sentido eso, te invito a algo sencillo: mira hacia el Sol.", "Parece pequeño, pero está a 150 millones de kilómetros. Su luz tarda más de 8 minutos en llegar hasta aquí.", "Este es todo el mundo que conoces.", "Ahora, siéntate.", "¿Ya estás sentado? Por tu seguridad, es muy importante que lo hagas.", "Mercurio, el planeta más cercano al Sol.", "Mide 4.879 kilómetros, poco más de un tercio de la Tierra.", "Marte, un planeta rocoso del Sistema Solar.", "Mide 6.779 kilómetros, un poco más de la mitad de la Tierra.", "Venus, otro planeta rocoso del Sistema Solar.", "Mide 12.104 kilómetros, casi igual que la Tierra.", "Esta es la Tierra, nuestro hogar.", "Mide 12.756 kilómetros de diámetro.", "Neptuno, un gigante de hielo del Sistema Solar.", "Mide 49.244 kilómetros, casi cuatro veces la Tierra.", "Urano, también un gigante de hielo.", "Mide 50.724 kilómetros, unas cuatro veces la Tierra.", "Saturno, un gigante gaseoso famoso por sus anillos.", "Mide 116.460 kilómetros, más de nueve veces la Tierra.", "Júpiter, el planeta más grande del Sistema Solar.", "Mide 139.820 kilómetros, unas once veces la Tierra.", "Y este es el Sol, la estrella de nuestro sistema.", "Es unas 109 veces más ancho que la Tierra. En su interior cabrían más de un millón de Tierras.", "Sirio, una estrella de la Vía Láctea, en la constelación del Can Mayor.", "Es la más brillante del cielo nocturno. Mide 1,7 radios solares y está a 8,6 años luz.", "Arturo, una estrella de la Vía Láctea, en la constelación del Boyero.", "Es una gigante naranja de unos 25 radios solares, a 37 años luz.", "Betelgeuse, una estrella de la Vía Láctea, en la constelación de Orión.", "Es una supergigante roja de entre 640 y 760 radios solares, a una distancia de entre 500 y 650 años luz.", "UY Scuti, una estrella de la Vía Láctea, en la constelación del Escudo.", "Es una supergigante roja de entre 755 y 1.700 radios solares, según la medición, a entre 5.100 y 9.500 años luz.", "VY Canis Majoris, una estrella de la Vía Láctea, en la constelación del Can Mayor.", "Es una hipergigante roja de unos 1.420 radios solares, a 3.900 años luz.", "Stephenson 2-18, la mayor estrella conocida. Está en la Vía Láctea, en un cúmulo de la constelación del Escudo.", "Es una supergigante roja de unos 2.150 radios solares, a unos 19.000 años luz.", "Frente a todo esto, tus problemas se ven más pequeños de lo que parecían. Y aun así, en este punto diminuto es donde existe todo lo que te importa.", "Cuando quieras, puedes ponerte de pie con calma."];const AUD=[];
+function preloadNarr(){if(AUD.length)return;NARR.forEach((t,i)=>{const a=new Audio('audio/'+String(i+1).padStart(2,'0')+'.mp3');a.preload='auto';a.addEventListener('error',()=>{a.bad=true});AUD.push(a)})}
+function speak(t){if(!$('voice').checked)return Promise.resolve();const i=NARR.indexOf(t),a=i>=0&&AUD[i];if(!a||a.bad)return tts(t);
+ return new Promise(res=>{let d=false;const fin=()=>{if(!d){d=true;res()}};a.onended=fin;a.onerror=()=>{a.bad=true;tts(t).then(fin)};a.currentTime=0;
+  const pr=a.play();if(pr&&pr.catch)pr.catch(()=>{a.bad=true;tts(t).then(fin)});setTimeout(fin,t.length*130+6000)})}
 async function say(t,ms){await sp;hud(t);const p=speak(t);sp=p;if(ms===1)return;await Promise.all([p,sleep(ms??t.length*68+900)]);await sleep(500)}
 
 // Sonido sintetizado (original): viento, temblor de la Tierra y "aproximación" de algo colosal
@@ -323,9 +329,9 @@ async function run(){
  $('ov').style.display='flex';
 }
 let started=false;
-function begin(){audioInit();if(started)return;started=true;$('ov').style.display='none';run()}
+function begin(){audioInit();preloadNarr();if(started)return;started=true;$('ov').style.display='none';run()}
 $('go').onclick=begin;
 if(navigator.xr){navigator.xr.isSessionSupported('immersive-vr').then(ok=>{if(ok)$('vr').style.display=''}).catch(()=>{})}
-$('vr').onclick=async()=>{audioInit();try{const s=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor']});
+$('vr').onclick=async()=>{audioInit();preloadNarr();try{const s=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor']});
  s.addEventListener('select',()=>{selectFlag=true});await R.xr.setSession(s);$('hint').style.display='none';begin()}catch(e){alert('No se pudo iniciar VR: '+e.message)}};
 </script></body></html>
